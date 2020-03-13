@@ -1,0 +1,143 @@
+
+// Include required libraries
+#include "ThingSpeak.h"
+#include <SPI.h>
+#include <WiFiNINA.h>
+
+// Initiates client to connect with ssid
+WiFiSSLClient client;
+char ssid[] = "SECRET_SSID";        //  Secret tab used to protect sensitive data
+char pass[] = "SECRET_PASSWORD";   //  Secret tab used to protect sensitive data
+// Returns the Wifi connection status
+int status = WL_IDLE_STATUS;
+
+// Declares ThingSpeak channel number and API key
+unsigned long myChannelNumber = 639059; //  Secret tab used to protect sensitive data
+const char * myWriteAPIKey = "7G92LVG94DLJHS4H"; //  Secret tab used to protect sensitive data
+
+// Declares all variables needed to determine BPM
+int heartMeasurePin = A0;
+int UpperThreshold = 518;
+int LowerThreshold = 490;
+    int reading = 0;
+    float BPM = 0.0;
+    bool IgnoreReading = false;
+    bool FirstPulseDetected = false;
+    unsigned long FirstPulseTime = 0;
+    unsigned long SecondPulseTime = 0;
+    unsigned long PulseInterval = 0;
+    unsigned int samplingTime = 280;
+
+// Declares all variables to determine dust concentration
+int dustMeasurePin = A5;
+int ledPower = 12;
+float voMeasured = 0;
+float calcVoltage = 0;
+float dustDensity = 0;
+
+
+void setup(){
+  // Initiates serial port
+  Serial.begin(9600);
+  pinMode(ledPower,OUTPUT);
+  pinMode(10, INPUT); // Setup for leads off detection LO +
+  pinMode(9, INPUT); // Setup for leads off detection LO -
+  
+while (!Serial) {
+    ; // Wait for serial port to connect.
+  }
+
+  // Check for the presence of the shield:
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present");
+    // don't continue:
+    while (true);
+  }
+
+  // Attempt to connect to WiFi network:
+  while ( status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.println(ssid);
+    // Connect to WPA/WPA2 network:
+    status = WiFi.begin(ssid, pass);
+
+    // Wait 10 seconds for connection:
+    delay(10000);
+  }
+
+  // Print to serial monitor
+  Serial.print("You're connected to the network");
+}
+
+void loop(){
+    // Initialise the ThingSpeak library
+    ThingSpeak.begin(client);
+    // Calls calculateBPM code
+    CalculateBPM();
+    // Calls calculateDust code
+    CalculateDust();
+    if(firstUpload == false){ 
+      firstUploadTime = millis();
+      firstUpload = true;
+    }
+    secondUploadTime = millis();
+    if(secondUploadTime > (firstUploadTime + 15000)
+    
+}
+
+void CalculateBPM(){
+    // Reads pin for the analogue value of heart rate
+    reading = analogRead(heartMeasurePin); 
+    
+    // If the first analogue reading is within the thresholds record time
+    if(reading > UpperThreshold && IgnoreReading == false){
+      if(FirstPulseDetected == false){
+        FirstPulseTime = millis();
+        FirstPulseDetected = true;
+      }
+      // On second pulse, calculate the interval between both readings, then make the second pulse the first
+      else{
+        SecondPulseTime = millis();
+        PulseInterval = SecondPulseTime - FirstPulseTime;
+        FirstPulseTime = SecondPulseTime;
+      }
+      // Ignores the value for now
+      IgnoreReading = true;
+    }
+    // If the reading is also < the lowerthreshold, it is no longer ignored
+    if(reading < LowerThreshold){
+      IgnoreReading = false;
+    }  
+    
+    // Calculates the BPM from the pulse interval
+    BPM = (1.0/PulseInterval) * 60.0 * 1000;
+    // Print the BPM to the serial port
+    Serial.println(BPM);
+    Serial.print(" BPM");
+    digitalWrite(ledPower,LOW);
+    delayMicroseconds(samplingTime);
+    // Allows time to pass to avoid data saturation 
+    delay(100);
+}
+
+void CalculateDust(){
+    // Reads pin for the analogue value of the dust concentration
+    voMeasured = analogRead(dustMeasurePin);
+    // Calculates the voltage from the analogue reading
+    calcVoltage = voMeasured*(5.0/1024);
+    // Calculates the dust concentration from the voltage
+    dustDensity = 0.17*calcVoltage-0.1;
+    // Incase of a bad reading change it to 0
+    if ( dustDensity < 0){
+      dustDensity = 0.00;
+    }
+
+  Serial.println("Dust Density:");
+  Serial.println(dustDensity);
+}
+
+void sendToThingSpeak(){
+  
+  
+  
+}
